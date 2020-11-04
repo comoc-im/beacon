@@ -2,108 +2,90 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
+	"github.com/gorilla/websocket"
 	"github.com/rs/cors"
+	"log"
 	"net/http"
-	"sync"
 )
 
-//func beacon(res http.ResponseWriter, req *http.Request) {
-//	if n, err := io.Copy(res, req.Body); err != nil {
-//		fmt.Println(n, err)
-//	}
-//}
+type MessageType string
 
-type Username string
+const (
+	Description MessageType = "description"
+	Candidate               = "candidate"
+	Heartbeat               = "heartbeat"
+)
 
-type description struct {
-	Type string `json:"type"`
-	Sdp  string `json:"sdp"`
+type Message struct {
+	From    string      `json:"from"`
+	To      string      `json:"to"`
+	Type    MessageType `json:"type"`
+	Payload string      `json:"payload"`
 }
 
-type candidate struct {
-	Candidate        string `json:"candidate"`
-	SdpMid           string `json:"sdpMid"`
-	SdpMLineIndex    uint   `json:"sdpMLineIndex"`
-	UsernameFragment string `json:"usernameFragment"`
-}
+var conMap map[string]*websocket.Conn
 
-type peerInfo struct {
-	Description *description `json:"description"`
-	Candidates  []candidate  `json:"candidates"`
-}
+func beacon(res http.ResponseWriter, req *http.Request) {
 
-var mt sync.Mutex
-var desMap map[Username]description
-var candidateMap map[Username][]candidate
-
-func init() {
-	desMap = map[Username]description{}
-	candidateMap = map[Username][]candidate{}
-}
-
-func getRemoteInfo(res http.ResponseWriter, req *http.Request) {
-	mt.Lock()
-	defer mt.Unlock()
-	query := req.URL.Query()
-	username := Username(query.Get("username"))
-
-	var result peerInfo
-
-	description, ok1 := desMap[username]
-	if ok1 {
-		result.Description = &description
-		delete(desMap, username)
+	var upgrader = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
 	}
 
-	candidates, ok2 := candidateMap[username]
-	if ok1 || ok2 {
-		result.Candidates = candidates
-		delete(candidateMap, username)
+	conn, err := upgrader.Upgrade(res, req, nil)
+	if err != nil {
+		log.Println(err)
+		return
 	}
 
-	fmt.Println("reading of", username, "is", result)
-	bs, _ := json.Marshal(result)
-	_, _ = res.Write(bs)
-}
-
-func registerDescription(res http.ResponseWriter, req *http.Request) {
-	mt.Lock()
-	defer mt.Unlock()
 	query := req.URL.Query()
-	username := Username(query.Get("username"))
+	username := query.Get("username")
 
-	des := description{}
-	_ = json.NewDecoder(req.Body).Decode(&des)
+	delete(conMap, username)
+	conMap[username] = conn
 
-	fmt.Println("register description", username, des)
-	desMap[username] = des
+	defer conn.Close()
+	go func() {
+		for {
+			mt, message, err := conn.ReadMessage()
+			if err != nil {
+				log.Println("read:", err)
+				continue
+			}
+			log.Printf("recv: %s", message)
 
-	_, _ = res.Write(nil)
-}
+			var msg Message
+			err = json.Unmarshal(message, &msg)
+			if err != nil {
+				log.Println("parse:", err)
+				continue
+			}
 
-func registerCandidate(res http.ResponseWriter, req *http.Request) {
-	mt.Lock()
-	defer mt.Unlock()
-	query := req.URL.Query()
-	username := Username(query.Get("username"))
+			var targetConn *websocket.Conn
+			if msg.Type == Heartbeat {
+				targetConn = conn
+			} else {
+				target, ok := conMap[msg.To]
+				if !ok {
+					log.Println("target:", err)
+					continue
+				}
+				targetConn = target
+			}
 
-	cadi := candidate{}
-	_ = json.NewDecoder(req.Body).Decode(&cadi)
-
-	fmt.Println("register candidate", username, candidate{})
-	candidateMap[username] = append(candidateMap[username], cadi)
-
-	_, _ = res.Write(nil)
+			err = targetConn.WriteMessage(mt, message)
+			if err != nil {
+				log.Println("write:", err)
+				break
+			}
+		}
+	}()
 }
 
 func main() {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/read", getRemoteInfo)
-	mux.HandleFunc("/post/description", registerDescription)
-	mux.HandleFunc("/post/candidate", registerCandidate)
-
-	handler := cors.Default().Handler(mux)
+	conMap = map[string]*websocket.Conn{}
+	handler := cors.Default().Handler(http.HandlerFunc(beacon))
+	log.Println("beacon server up and running.")
 	if err := http.ListenAndServe(":9999", handler); err != nil {
 		panic(err)
 	}
