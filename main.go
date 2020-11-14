@@ -86,7 +86,7 @@ func main() {
 	conMap = map[string]*websocket.Conn{}
 	handler := cors.Default().Handler(http.HandlerFunc(beacon))
 	log.Println("beacon server up and running.")
-	if err := http.ListenAndServe(":9999", handler); err != nil {
+	if err := http.ListenAndServe("127.0.0.1:9999", handler); err != nil {
 		panic(err)
 	}
 }
