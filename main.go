@@ -30,6 +30,10 @@ func beacon(res http.ResponseWriter, req *http.Request) {
 	var upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			log.Println("req origin", r.Header["Origin"])
+			return true
+		},
 	}
 
 	conn, err := upgrader.Upgrade(res, req, nil)
