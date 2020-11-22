@@ -50,11 +50,12 @@ func beacon(res http.ResponseWriter, req *http.Request) {
 
 	defer conn.Close()
 	go func() {
+		defer conn.Close()
 		for {
 			mt, message, err := conn.ReadMessage()
 			if err != nil {
 				log.Println("read:", err)
-				continue
+				break
 			}
 			log.Printf("recv: %s", message)
 
