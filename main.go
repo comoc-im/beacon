@@ -45,10 +45,10 @@ func beacon(res http.ResponseWriter, req *http.Request) {
 	query := req.URL.Query()
 	username := query.Get("username")
 
+	log.Println(username, "connecting")
 	delete(conMap, username)
 	conMap[username] = conn
 
-	defer conn.Close()
 	go func() {
 		defer conn.Close()
 		for {
