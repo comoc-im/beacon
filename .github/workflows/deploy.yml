@@ -1,0 +1,56 @@
+name: deploy
+
+on:
+    push:
+        branches: [ main ]
+    pull_request:
+        branches: [ main ]
+
+jobs:
+
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v2
+
+            - name: Set up Go
+              uses: actions/setup-go@v2
+              with:
+                  go-version: 1.17
+
+            - name: Install dependencies
+              env:
+                  GO111MODULE: on
+              run: go mod download
+
+            - name: Build
+              env:
+                  GO111MODULE: on
+                  GOOS: linux
+                  GOARCH: 386
+              run: go build -o beacon
+
+            - name: Upload
+              uses: appleboy/scp-action@master
+              with:
+                  host: ${{ secrets.TENCENT_CVM_IP }}
+                  username: root
+                  password: ${{ secrets.TENCENT_CVM_PWD }}
+                  #port: ${{ secrets.PORT }}
+                  source: "./beacon"
+                  target: "/opt/apps/beacon/"
+            - name: Restart
+              uses: appleboy/ssh-action@v0.1.4
+              with:
+                  # ssh host
+                  host: ${{ secrets.TENCENT_CVM_IP }} # optional
+                  # ssh port
+                  # port: # optional, default is 22
+                  # ssh key passphrase
+                  # passphrase: # optional
+                  # ssh username
+                  username: root # optional
+                  # ssh password
+                  password: ${{ secrets.TENCENT_CVM_PWD }} # optional
+                  # execute commands
+                  script: supervisorctl restart beacon # optional
