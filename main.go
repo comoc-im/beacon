@@ -1,7 +1,9 @@
 package main
 
 import (
-	"encoding/json"
+	"encoding/hex"
+	"fmt"
+	"github.com/comoc-im/message"
 	"github.com/gorilla/websocket"
 	"github.com/rs/cors"
 	"log"
@@ -17,13 +19,13 @@ const (
 )
 
 type Message struct {
-	From    string      `json:"from"`
-	To      string      `json:"to"`
-	Type    MessageType `json:"type"`
-	Payload string      `json:"payload"`
+	From    message.Address `json:"from"`
+	To      message.Address `json:"to"`
+	Type    MessageType     `json:"type"`
+	Payload string          `json:"payload"`
 }
 
-var conMap map[string]*websocket.Conn
+var conMap map[message.Address]*websocket.Conn
 
 func beacon(res http.ResponseWriter, req *http.Request) {
 
@@ -46,49 +48,62 @@ func beacon(res http.ResponseWriter, req *http.Request) {
 	username := query.Get("username")
 
 	log.Println(username, "connecting")
-	delete(conMap, username)
-	conMap[username] = conn
+	data, err := hex.DecodeString(username)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("% x", data)
+	add := message.Address{}
+	copy(add[:], data)
+	delete(conMap, add)
+	conMap[add] = conn
 
 	go func() {
 		defer conn.Close()
 		for {
-			mt, message, err := conn.ReadMessage()
+			mt, rawBytes, err := conn.ReadMessage()
 			if err != nil {
 				log.Println("read:", err)
 				break
 			}
-			log.Printf("recv: %s", message)
+			log.Println("recv:", mt, rawBytes)
 
-			var msg Message
-			err = json.Unmarshal(message, &msg)
-			if err != nil {
+			if len(rawBytes) == 1 && rawBytes[0] == message.PING {
+				err = conn.WriteMessage(mt, []byte{message.PONG})
+				if err != nil {
+					log.Println("heartbeat:", err)
+					break
+				}
+				log.Println("heartbeat")
+				continue
+			}
+
+			//var msg Message
+			msg := message.Signal{}
+			if err := msg.Decode(&rawBytes); err != nil {
 				log.Println("parse:", err)
 				continue
 			}
 
 			var targetConn *websocket.Conn
-			if msg.Type == Heartbeat {
-				targetConn = conn
-			} else {
-				target, ok := conMap[msg.To]
-				if !ok {
-					log.Println("target:", err)
-					continue
-				}
-				targetConn = target
+			target, ok := conMap[msg.To]
+			if !ok {
+				log.Println("target:", err)
+				continue
 			}
-
-			err = targetConn.WriteMessage(mt, message)
+			targetConn = target
+			err = targetConn.WriteMessage(mt, rawBytes)
 			if err != nil {
 				log.Println("write:", err)
 				break
 			}
+
 		}
 	}()
 }
 
 func main() {
-	conMap = map[string]*websocket.Conn{}
+	conMap = map[message.Address]*websocket.Conn{}
 	handler := cors.Default().Handler(http.HandlerFunc(beacon))
 	log.Println("beacon server up and running.")
 	if err := http.ListenAndServe("127.0.0.1:9999", handler); err != nil {
