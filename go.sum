@@ -1,5 +1,5 @@
-github.com/comoc-im/message v0.1.2 h1:xjpQHhcm9jg4bQjFEsA7akOLHz4YGhGOA98iBHgcK34=
-github.com/comoc-im/message v0.1.2/go.mod h1:AGSPMn6r4uH/imJb1wzO8/u1NKOr05FmcupzcMe35Vs=
+github.com/comoc-im/message v0.1.5 h1:md8C8ZN+18AGCUGytP37gX4/ALkEX5JHo0VJ2BPr8Yc=
+github.com/comoc-im/message v0.1.5/go.mod h1:AGSPMn6r4uH/imJb1wzO8/u1NKOr05FmcupzcMe35Vs=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/gin-contrib/sse v0.1.0/go.mod h1:RHrZQHXnP2xjPF+u1gW/2HnVO7nvIa9PG3Gm+fLHvGI=

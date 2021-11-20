@@ -1,39 +1,91 @@
 package main
 
 import (
-	"encoding/hex"
-	"fmt"
+	"errors"
 	"github.com/comoc-im/message"
+	"github.com/comoc-im/message/address"
+	"github.com/comoc-im/message/auth"
+	"github.com/comoc-im/message/signal"
 	"github.com/gorilla/websocket"
 	"github.com/rs/cors"
 	"log"
 	"net/http"
 )
 
-type MessageType string
+var conMap map[address.Address]*websocket.Conn
 
-const (
-	Description MessageType = "description"
-	Candidate               = "candidate"
-	Heartbeat               = "heartbeat"
-)
+func handleConnection(conn *websocket.Conn) {
+	defer func(conn *websocket.Conn) {
+		err := conn.Close()
+		if err != nil {
+			log.Println("error close connection", err)
+		}
+	}(conn)
+	for {
+		mt, rawBytes, err := conn.ReadMessage()
+		if err != nil {
+			log.Println("read:", err)
+			break
+		}
+		//log.Println("recv:", mt)
+		if len(rawBytes) == 0 {
+			log.Println(errors.New("empty message"))
+			continue
+		}
 
-type Message struct {
-	From    message.Address `json:"from"`
-	To      message.Address `json:"to"`
-	Type    MessageType     `json:"type"`
-	Payload string          `json:"payload"`
+		if len(rawBytes) == 1 && rawBytes[0] == message.PING {
+			err = conn.WriteMessage(mt, []byte{message.PONG})
+			if err != nil {
+				log.Println("heartbeat:", err)
+				break
+			}
+			//log.Println("heartbeat")
+			continue
+		}
+
+		firstByte := rawBytes[0]
+		messageType := message.MessageType(firstByte)
+		switch messageType {
+		case message.SignIn:
+			si := auth.SignIn{}
+			if err := si.Decode(&rawBytes); err != nil {
+				log.Println("bad sign in message", err)
+				continue
+			}
+			if _, ok := conMap[si.Address]; !ok {
+				defer delete(conMap, si.Address)
+			}
+			conMap[si.Address] = conn
+			continue
+		case message.Signal:
+			s := signal.Signal{}
+			if err := s.Decode(&rawBytes); err != nil {
+				log.Println("bad sign in message", err)
+				continue
+			}
+			target, ok := conMap[s.To]
+			if !ok {
+				log.Println("target:", err)
+				continue
+			}
+			err = target.WriteMessage(mt, rawBytes)
+			if err != nil {
+				log.Println("write:", err)
+				continue
+			}
+		default:
+			log.Println(errors.New("not valid message"))
+			continue
+		}
+	}
 }
 
-var conMap map[message.Address]*websocket.Conn
-
 func beacon(res http.ResponseWriter, req *http.Request) {
-
 	var upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 		CheckOrigin: func(r *http.Request) bool {
-			log.Println("req origin", r.Header["Origin"])
+			//log.Println("req origin", r.Header["Origin"])
 			return true
 		},
 	}
@@ -44,66 +96,11 @@ func beacon(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	query := req.URL.Query()
-	username := query.Get("username")
-
-	log.Println(username, "connecting")
-	data, err := hex.DecodeString(username)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("% x", data)
-	add := message.Address{}
-	copy(add[:], data)
-	delete(conMap, add)
-	conMap[add] = conn
-
-	go func() {
-		defer conn.Close()
-		for {
-			mt, rawBytes, err := conn.ReadMessage()
-			if err != nil {
-				log.Println("read:", err)
-				break
-			}
-			log.Println("recv:", mt, rawBytes)
-
-			if len(rawBytes) == 1 && rawBytes[0] == message.PING {
-				err = conn.WriteMessage(mt, []byte{message.PONG})
-				if err != nil {
-					log.Println("heartbeat:", err)
-					break
-				}
-				log.Println("heartbeat")
-				continue
-			}
-
-			//var msg Message
-			msg := message.Signal{}
-			if err := msg.Decode(&rawBytes); err != nil {
-				log.Println("parse:", err)
-				continue
-			}
-
-			var targetConn *websocket.Conn
-			target, ok := conMap[msg.To]
-			if !ok {
-				log.Println("target:", err)
-				continue
-			}
-			targetConn = target
-			err = targetConn.WriteMessage(mt, rawBytes)
-			if err != nil {
-				log.Println("write:", err)
-				break
-			}
-
-		}
-	}()
+	go handleConnection(conn)
 }
 
 func main() {
-	conMap = map[message.Address]*websocket.Conn{}
+	conMap = map[address.Address]*websocket.Conn{}
 	handler := cors.Default().Handler(http.HandlerFunc(beacon))
 	log.Println("beacon server up and running.")
 	if err := http.ListenAndServe("127.0.0.1:9999", handler); err != nil {
