@@ -27,19 +27,8 @@ func handleConnection(conn *websocket.Conn) {
 			log.Println("read:", err)
 			break
 		}
-		//log.Println("recv:", mt)
 		if len(rawBytes) == 0 {
 			log.Println(errors.New("empty message"))
-			continue
-		}
-
-		if len(rawBytes) == 1 && rawBytes[0] == message.PING {
-			err = conn.WriteMessage(mt, []byte{message.PONG})
-			if err != nil {
-				log.Println("heartbeat:", err)
-				break
-			}
-			//log.Println("heartbeat")
 			continue
 		}
 

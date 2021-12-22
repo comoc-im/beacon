@@ -1,6 +1,6 @@
 module github.com/comoc-im/beacon
 
-go 1.15
+go 1.17
 
 require (
 	github.com/comoc-im/message v0.1.5
