@@ -9,7 +9,6 @@ func Write(client *Client) {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		client.close()
 	}()
 	for {
 		select {
