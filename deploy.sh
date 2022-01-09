@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-export GO111MODULE=on
 export GOPROXY=https://mirrors.aliyun.com/goproxy/,https://goproxy.cn,direct
 export GOOS=linux
 export GOARCH=386
