@@ -8,7 +8,7 @@ echo 1. install dependencies
 go mod download
 
 echo 2. build executable
-go build -o beacon
+go build -o beacon ./cmd/beacon/main.go
 
 echo 3. stop server
 ssh root@chummy.fun "
