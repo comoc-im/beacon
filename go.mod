@@ -3,9 +3,9 @@ module github.com/comoc-im/beacon
 go 1.17
 
 require (
-	github.com/comoc-im/message v0.1.6
-	github.com/gorilla/websocket v1.4.2
-	go.uber.org/zap v1.19.1
+	github.com/comoc-im/message v0.1.8
+	github.com/gorilla/websocket v1.5.0
+	go.uber.org/zap v1.23.0
 )
 
 require (
